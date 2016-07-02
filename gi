@@ -1,6 +1,6 @@
-# bash/zsh completion support for core gi wrapper for Git.
+# bash completion support for the gi wrapper for Git.
 #
-# Copyright (C) 2015 Kirill Gagarski <kirill.gagarski@gmail.com>
+# Copyright (C) 2016 Kirill Gagarski <kirill.gagarski@gmail.com>
 # This completion uses the routines defined in git-completion script 
 # by Shawn O. Pearce <spearce@spearce.org>.
 # Distributed under the GNU General Public License, version 2.0.
@@ -11,23 +11,17 @@
 # To use these routines:
 #
 #    1) Place this file to the same directory as git-completion.
-#       (git-completion can be named git-completion.bash, git-completion.zsh or git)
+#       (git-completion can be named git-completion.bash or git)
 #    2) Add the following line to your .bashrc/.zshrc:
 #        source $GIT_COMPLETION_DIRECTORY/gi
 #
 
 
 if [[ ! -z ${BASH_SOURCE[0]} ]]; then
-    __gi_bash=1
     __gi_my_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-elif [[ ! -z ${(%):-%N} ]]; then
-    __gi_zsh=1
-    __gi_my_dir="$( cd "$( dirname "${(%):-%N}" )" && pwd )"
 fi
 
-if [[ -f ${__gi_my_dir}/git-completion.zsh ]] && [[ ! -z ${__gi_zsh} ]]; then
-    __gi_git_completion=${__gi_my_dir}/git-completion.zsh
-elif [[ -f ${__gi_my_dir}/git-completion.bash ]]; then
+if [[ -f ${__gi_my_dir}/git-completion.bash ]]; then
     __gi_git_completion=${__gi_my_dir}/git-completion.bash
 elif [[ -f ${__gi_my_dir}/git ]]; then
     __gi_git_completion=${__gi_my_dir}/git
@@ -70,27 +64,36 @@ _gi_get_comp_words_by_ref ()
 __gi_restore_comp() {
     COMP_LINE=$1
     COMP_CWORD=$2
-    COMP_WORDS=( $3[@] )
+    COMP_WORDS=( "$3[@]" )
 }
 
 __gi_func_wrap ()
 {
     local old_comp_line=${COMP_LINE}
     local old_comp_cword=${COMP_CWORD}
-    local old_comp_words=( ${COMP_WORDS[@]} )
+    local old_comp_words=( "${COMP_WORDS[@]}" )
 
-    local helper_cli="${COMP_LINE} --gi-bash-completion-helper-with-comp-cword=${COMP_CWORD}"
-    local helper_output=( $(${helper_cli}) )
+    local is_empty_cword=False
+
+    if [[ -z "${COMP_WORDS[${COMP_CWORD}]}" ]]; then
+        is_empty_cword=True
+    fi
+
+    local helper_cli="${COMP_LINE} --gi-bash-completion-helper-with-comp-cword=${COMP_CWORD},${is_empty_cword}"
+    local helper_output=()
+    while IFS= read -r line; do
+        helper_output+=( "$line" )
+    done < <( ${helper_cli} )
+
+    COMP_LINE="${helper_output[@]:2}"
+    COMP_CWORD="${helper_output[1]}"
+    COMP_WORDS=("${helper_output[@]:2}")
 
     if [[ ${helper_output[0]} == True ]]; then
         __gi_restore_comp old_comp_line old_comp_cword old_comp_words
         return 0
     fi
 
-    COMP_LINE="${helper_output[@]:2}"
-    COMP_CWORD=${helper_output[1]}
-    COMP_WORDS=(${helper_output[@]:2})
-    
     _gi_get_comp_words_by_ref -n =: cur words cword prev
     $1
     __gi_restore_comp old_comp_line old_comp_cword old_comp_words
